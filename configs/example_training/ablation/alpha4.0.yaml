@@ -1,0 +1,184 @@
+model:
+  base_learning_rate: 1.0e-4
+  target: sgm.models.diffusion.TemporalResidualDiffusionEngine
+  params:
+    input_key: "gt_image"
+    mean_key: "raw_image"
+    image_path_key: "path"
+    compile_model: False
+    use_ema: True
+    use_flash_attn2: False
+    # ckpt_path: "" # your checkpoint path
+     
+    sigma_st_config:
+      target: sgm.modules.diffusionmodules.sigma2st.EDMSigma2St
+      params:
+        alpha: 4.0
+
+    denoiser_config:
+      target: sgm.modules.diffusionmodules.denoiser.TemporalResidualDenoiser
+      params:
+        scaling_config:
+          target: sgm.modules.diffusionmodules.denoiser_scaling.TemporalResidualEDMScaling
+          params:
+            sigma_input: 1.0
+            sigma_mu: 1.0
+            sigma_cov: 0.9
+
+    network_wrapper: "sgm.modules.diffusionmodules.wrappers.TemporalCloudRemovalWrapper"
+
+    network_config:
+      target: sgm.modules.diffusionmodules.k_diffusion.image_transformer.ImageTemporalTransformerDenoiserInterface
+      params:
+        in_channels: 7
+        out_channels: 3
+        patch_size: [4,4]
+        widths: [256,512,768]
+        depths: [2,2,16]
+        d_ffs: [512,1024,1536]
+        self_attns: [
+            {"type": "neighborhood", "d_head": 64, "kernel_size": 7},
+            {"type": "neighborhood", "d_head": 64, "kernel_size": 7},
+            {"type": "global", "d_head": 64},
+        ]
+        dropout_rate: [0.0,0.0,0.0]
+        mapping_depth: 2
+        mapping_width: 768
+        mapping_d_ff: 1536
+        mapping_dropout_rate: 0.1
+        temporal_n_heads: 16
+        temporal_d_model: 768
+        temporal_d_k: 48
+        temporal_positional_encoding: False
+        temporal_agg_mode: "att_group"
+        temporal_dropout: 0.0
+        temporal_use_drouput: False
+        temporal_mlp: [768, 1536]
+        pad_value: 0
+        tanh: False
+
+
+    first_stage_config:
+      target: sgm.models.autoencoder.IdentityFirstStage
+
+    loss_fn_config:
+      target: sgm.modules.diffusionmodules.loss.TemporalResidualDiffusionLoss
+      params:
+        loss_weighting_config:
+          target: sgm.modules.diffusionmodules.loss_weighting.TemporalResidualEDMWeighting
+          params:
+            sigma_input: 1.0
+            sigma_mu: 1.0
+            sigma_cov: 0.9
+        sigma_sampler_config:
+          target: sgm.modules.diffusionmodules.sigma_sampling.EDMSampling
+          params:
+            p_mean: -1.4
+            p_std: 1.4
+
+    conditioner_config:
+      target: sgm.modules.GeneralConditioner
+      params:
+        emb_models:
+          - is_trainable: True
+            input_key:  "cond_image"
+            ucg_rate: 0.0
+            target: sgm.modules.encoders.modules.IndentityEmbedder 
+
+    sampler_config:
+      target: sgm.modules.diffusionmodules.sampling.TemporalResidualEulerEDMSampler
+      params:
+        # device: "cpu"
+        num_steps: 5
+        # s_churn: 0.0
+        # s_tmin: 0.5
+        # s_tmax: 100000000.0
+        # s_noise: 1.003
+
+        discretization_config:
+          target: sgm.modules.diffusionmodules.discretizer.EDMDiscretization
+          params:
+            sigma_min: 0.001
+            sigma_max: 100.0
+    
+    to_rgb_config:
+      target: sgm.util.S1andS2_to_rgb
+    scale_01_config:
+      target: sgm.util.sen_mtc_scale_01
+
+data:
+  target: sgm.data.base.DataModuleFromConfig
+  params:
+    batch_size: 1
+    num_workers: 8
+    wrap: True
+    train:
+      target: sgm.data.sen2_mtc_new.sen2_mtc_new.Sen2_MTC_New_Multi
+      params:
+        data_root: "/remote-home/share/dmb_nas/liuyi/Sen2_MTC_New/"
+        use_ir: True
+        mode: 'train'
+    validation:
+      target: sgm.data.sen2_mtc_new.sen2_mtc_new.Sen2_MTC_New_Multi
+      params:
+        data_root: "/remote-home/share/dmb_nas/liuyi/Sen2_MTC_New/"
+        use_ir: True
+        mode: 'val'
+    test:
+      target: sgm.data.sen2_mtc_new.sen2_mtc_new.Sen2_MTC_New_Multi
+      params:
+        data_root: "/remote-home/share/dmb_nas/liuyi/Sen2_MTC_New/"
+        use_ir: True
+        mode: 'test'
+    predict:
+      target: sgm.data.sen2_mtc_new.sen2_mtc_new.Sen2_MTC_New_Multi
+      params:
+        data_root: "/remote-home/share/dmb_nas/liuyi/Sen2_MTC_New/"
+        use_ir: True
+        mode: 'test'
+
+lightning:
+  modelcheckpoint:
+    params:
+      every_n_train_steps: 5000
+      monitor: "RMSE"
+
+  callbacks:
+    metrics_over_trainsteps_checkpoint:
+      params:
+        every_n_train_steps: 5000
+
+    image_logger:
+      target: main.ImageLogger
+      params:
+        enable_autocast: False
+        disabled: False
+        batch_frequency: 1000
+        max_images: 64
+        increase_log_steps: False
+        log_first_step: False
+        log_images_kwargs:
+          use_ema_scope: False
+          N: 64
+          n_rows: 16
+          return_intermediate: True
+          return_denoised: True
+          return_add_mu: True
+          return_add_noise: True
+          return_cond: True
+  
+  # profiler: "simple"
+    # target: lightning.pytorch.profilers.SimpleProfiler
+    # params:
+    #   dirpath: "./"
+    #   filename: "perf_logs"
+
+  trainer:
+    # accelerator: "cpu"
+    devices: 6,
+    num_sanity_val_steps: 0
+    benchmark: True
+    check_val_every_n_epoch: 5
+    accumulate_grad_batches: 1
+    max_epochs: 500
+    

@@ -1,0 +1,185 @@
+model:
+  base_learning_rate: 1.0e-4
+  target: sgm.models.diffusion.ResidualDiffusionEngine
+  params:
+    input_key: "target"
+    mean_key: "S2"
+    compile_model: False
+    use_ema: True
+    use_flash_attn2: False
+    # ckpt_path: "" # your checkpoint path
+
+    sigma_st_config:
+      target: sgm.modules.diffusionmodules.sigma2st.EDMSigma2St
+      params:
+        alpha: 3.0
+
+    denoiser_config:
+      target: sgm.modules.diffusionmodules.denoiser.ResidualDenoiser
+      params:
+        scaling_config:
+          target: sgm.modules.diffusionmodules.denoiser_scaling.ResidualEDMScaling
+          params:
+            sigma_input: 1.0
+            sigma_mu: 1.0
+
+    network_wrapper: "sgm.modules.diffusionmodules.wrappers.CloudRemovalWrapper"
+
+    network_config:
+      target: sgm.modules.diffusionmodules.k_diffusion.image_transformer.ImageTransformerDenoiserModelInterface
+      params:
+        in_channels:  28
+        out_channels: 13
+        patch_size: [1,1]
+        widths: [128,256,384,768]
+        depths: [2,2,2,2]
+        d_ffs: [256,512,768,1536]
+        self_attns: [
+            {"type": "neighborhood", "d_head": 64, "kernel_size": 7},
+            {"type": "neighborhood", "d_head": 64, "kernel_size": 7},
+            {"type": "global", "d_head": 64},
+            {"type": "global", "d_head": 64},
+        ]
+        dropout_rate: [0.0,0.0,0.0,0.1]
+        mapping_depth: 2
+        mapping_width: 768
+        mapping_d_ff: 1536
+        mapping_dropout_rate: 0.1
+
+    conditioner_config:
+      target: sgm.modules.GeneralConditioner
+      params:
+        emb_models:
+          - is_trainable: True
+            input_key:  "S1S2"
+            ucg_rate: 0.0
+            target: sgm.modules.encoders.modules.IndentityEmbedder 
+          # - is_trainable: True
+          #   input_key:  "S1"
+          #   ucg_rate: 0.0
+          #   target: sgm.modules.encoders.modules.ImageTransformerEncoderInterface
+          #   params:
+          #     in_channels: 2
+          #     patch_size: [4,4]
+          #     widths: [256,512,768]
+          #     depths: [2,2,16]
+          #     d_ffs: [512,1024,1536]
+          #     self_attns: [
+          #         {"type": "neighborhood", "d_head": 64, "kernel_size": 7},
+          #         {"type": "neighborhood", "d_head": 64, "kernel_size": 7},
+          #         {"type": "global", "d_head": 64},
+          #     ]
+          #     dropout_rate: [0.0,0.0,0.0]
+
+    first_stage_config:
+      target: sgm.models.autoencoder.IdentityFirstStage
+
+    loss_fn_config:
+      target: sgm.modules.diffusionmodules.loss.ResidualDiffusionLoss
+      params:
+        loss_weighting_config:
+          target: sgm.modules.diffusionmodules.loss_weighting.ResidualEDMWeighting # ResidualSoftMinSnrWeighting
+          params:
+            sigma_input: 1.0
+            sigma_mu: 1.0
+        sigma_sampler_config:
+          target: sgm.modules.diffusionmodules.sigma_sampling.EDMSampling
+          params:
+            p_mean: -1.2
+            p_std: 1.2
+
+    sampler_config:
+      target: sgm.modules.diffusionmodules.sampling.ResidualEulerEDMSampler
+      params:
+        num_steps: 5
+        s_churn: 5.0
+        s_tmin: 0.0
+        s_tmax: 100000000.0
+        s_noise: 1.023
+
+        discretization_config:
+          target: sgm.modules.diffusionmodules.discretizer.EDMDiscretization
+          params:
+            sigma_min: 0.001
+            sigma_max: 100.0
+    
+    to_rgb_config:
+      target: sgm.util.S1andS2_to_rgb
+
+data:
+  target: sgm.data.base.DataModuleFromConfig
+  params:
+    batch_size: 1
+    num_workers: 8
+    wrap: True
+    train:
+      target: sgm.data.sentinel.sentinel.SEN12MSCRInterface
+      params:
+        root: "/remote-home/share/dmb_nas2/liuyi/SEN12MSCR"
+        split: "train"
+        region: "all"
+        rescale: True
+        cloud_masks:
+
+    validation:
+      target: sgm.data.sentinel.sentinel.SEN12MSCRInterface
+      params:
+        root: "/remote-home/share/dmb_nas2/liuyi/SEN12MSCR"
+        split: "val"
+        region: "all"
+        rescale: True
+        cloud_masks:
+
+    test:
+      target: sgm.data.sentinel.sentinel.SEN12MSCRInterface
+      params:
+        root: "/remote-home/share/dmb_nas2/liuyi/SEN12MSCR"
+        split: "test"
+        region: "all"
+        rescale: True
+        cloud_masks:
+
+    predict:
+      target: sgm.data.sentinel.sentinel.SEN12MSCRInterface
+      params:
+        root: "/remote-home/share/dmb_nas2/liuyi/SEN12MSCR"
+        split: "test"
+        region: "all"
+        rescale: True
+        cloud_masks:
+
+lightning:
+  modelcheckpoint:
+    params:
+      every_n_train_steps: 5000
+      monitor: "RMSE"
+
+  callbacks:
+    metrics_over_trainsteps_checkpoint:
+      params:
+        every_n_train_steps: 25000
+
+    image_logger:
+      target: main.ImageLogger
+      params:
+        disabled: False
+        batch_frequency: 2000
+        max_images: 64
+        increase_log_steps: False
+        log_first_step: True
+        log_images_kwargs:
+          use_ema_scope: False
+          N: 64
+          n_rows: 16
+          return_intermediate: True
+          return_denoised: True
+          return_add_mu: True
+          return_add_noise: True
+          return_cond: True
+
+  trainer:
+    devices: 2,4
+    num_sanity_val_steps: 2
+    benchmark: True
+    accumulate_grad_batches: 1
+    max_epochs: 100

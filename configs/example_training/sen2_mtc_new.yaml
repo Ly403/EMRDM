@@ -1,0 +1,180 @@
+model:
+  base_learning_rate: 1.0e-4
+  target: sgm.models.diffusion.TemporalResidualDiffusionEngine # TemporalResidualDiffusionEngine for multi-temporal CR, ResidualDiffusionEngine for mono-temporal CR
+  params:
+    input_key: "gt_image" # "gt_image" is the key of the ground truth image (i.e, the cloudless image) returned by the dataloader
+    mean_key: "raw_image" # "raw_image" is the key of the cloudy image returned by the dataloader
+    image_path_key: "path" # "path" is the key of the image path returned by the dataloader
+    compile_model: False # whether to compile the model using torch.compile
+    use_ema: True # whether to use EMA
+    use_flash_attn2: False # whether to use flash attention 2
+    # ckpt_path: "" # path to your checkpoint 
+     
+    sigma_st_config:
+      target: sgm.modules.diffusionmodules.sigma2st.EDMSigma2St
+      params:
+        alpha: 1.0 # the hyperparameter alpha mentioned in the paper
+
+    denoiser_config:
+      target: sgm.modules.diffusionmodules.denoiser.TemporalResidualDenoiser
+      params:
+        scaling_config:
+          target: sgm.modules.diffusionmodules.denoiser_scaling.TemporalResidualEDMScaling
+          params:
+            sigma_input: 1.0 # the hyperparameter sigma_input mentioned in the paper
+            sigma_mu: 1.0 # the hyperparameter sigma_mu mentioned in the paper
+
+    network_wrapper: "sgm.modules.diffusionmodules.wrappers.TemporalCloudRemovalWrapper"
+
+    network_config:
+      target: sgm.modules.diffusionmodules.k_diffusion.image_transformer.ImageTemporalTransformerDenoiserInterface
+      params:
+        in_channels: 7 # the number of input channels of the denoising network
+        out_channels: 3 # the number of output channels of the denoising network
+        patch_size: [4,4] # the patch size of the denoising network for patchifying the input image
+        widths: [256,512,768] # the number of channels of different resolutions in the denoising network
+        depths: [2,2,16] # the number of layers of different resolutions in the denoising network
+        # e.g. widths: [256,512,768] and depths: [2,2,16] means the first resolution has 256 channels and 2 layers, the second resolution has 512 channels and 2 layers, and the third resolution has 768 channels and 16 layers.
+        # we conduct a downsampling operation after each resolution (i.e. w, h -> w/2, h/2).
+        d_ffs: [512,1024,1536] # the number of channels of the feed forward network of different resolutions in the denoising network
+        self_attns: [
+            {"type": "neighborhood", "d_head": 64, "kernel_size": 7},
+            {"type": "neighborhood", "d_head": 64, "kernel_size": 7},
+            {"type": "global", "d_head": 64},
+        ] # the type of the attention mechanism of different resolutions in the denoising network
+        # d_head is the number of channels of the attention head, kernel_size is the size of the kernel for the neighborhood attention
+        dropout_rate: [0.0,0.0,0.0] # the dropout rate of different resolutions in the denoising network
+        # mapping network is used to embed the diffusion noise variance into the denoising network
+        mapping_depth: 2 # the number of layers of the mapping network
+        mapping_width: 768 # the number of channels of the mapping network
+        mapping_d_ff: 1536 # the number of channels of the feed forward network of the mapping network
+        mapping_dropout_rate: 0.1 # the dropout rate of the mapping network
+        # temporal block is used for collapsing temporal dimensions of the feature map
+        temporal_n_heads: 16 # the number of heads of the temporal attention
+        temporal_d_model: 768 # the number of channels of the feature map in the temporal attention
+        temporal_d_k: 48 # the number of channels of the key in the temporal attention
+        temporal_positional_encoding: False # default to be false, do not need to change
+        temporal_agg_mode: "att_group" # the aggregation mode of the temporal attention
+        temporal_dropout: 0.0 # the dropout rate of the temporal attention
+        temporal_use_drouput: False # whether to use dropout in the temporal attention
+        temporal_mlp: [768, 1536] # the number of channels of the linear layer to map the attention result to output in the temporal attention
+        pad_value: 0 # default to be 0, do not need to change
+        tanh: False # default to be False, do not need to change
+
+    conditioner_config:
+      target: sgm.modules.GeneralConditioner
+      params:
+        emb_models:
+          - is_trainable: True
+            input_key:  "cond_image"
+            ucg_rate: 0.0
+            target: sgm.modules.encoders.modules.IndentityEmbedder  # as we just concatenate the auxiliary modal image with the input image of the denoising network, the conditioner is not used
+
+
+    first_stage_config:
+      target: sgm.models.autoencoder.IdentityFirstStage # do not need to use autoencoder in this task
+
+    loss_fn_config:
+      target: sgm.modules.diffusionmodules.loss.TemporalResidualDiffusionLoss # TemporalResidualDiffusionLoss for multi-temporal CR, ResidualDiffusionLoss for mono-temporal CR
+      params:
+        loss_weighting_config:
+          target: sgm.modules.diffusionmodules.loss_weighting.TemporalResidualEDMWeighting # TemporalResidualEDMWeighting for multi-temporal CR, ResidualEDMWeighting for mono-temporal CR
+          params:
+            sigma_input: 1.0 # the hyperparameter sigma_input mentioned in the paper
+            sigma_mu: 1.0 # the hyperparameter sigma_mu mentioned in the paper
+        sigma_sampler_config:
+          target: sgm.modules.diffusionmodules.sigma_sampling.EDMSampling
+          params:
+            p_mean: -1.4 # the hyperparameter p_mean mentioned in the paper (algo. 1, line 2)
+            p_std: 1.4 # the hyperparameter p_std mentioned in the paper (algo. 1, line 2)
+
+    sampler_config:
+      target: sgm.modules.diffusionmodules.sampling.TemporalResidualEulerEDMSampler
+      params:
+        # the following hyperparameters are used for the Euler sampler, which is mentioned in the paper (algo 2)
+        num_steps: 5
+        # s_churn: 0.0
+        # s_tmin: 0.5
+        # s_tmax: 100000000.0
+        # s_noise: 1.003
+
+        discretization_config:
+          target: sgm.modules.diffusionmodules.discretizer.EDMDiscretization
+          params:
+          # the following hyperparameters are used for the discretization of the sampling process, which is mentioned in the paper (algo 2)
+            sigma_min: 0.001
+            sigma_max: 100.0
+    
+    to_rgb_config:
+      target: sgm.util.S1andS2_to_rgb
+    scale_01_config:
+      target: sgm.util.sen_mtc_scale_01
+
+data:
+  target: sgm.data.base.DataModuleFromConfig
+  params:
+    batch_size: 1 # batch size for each GPU
+    num_workers: 8 # number of workers for data loading
+    wrap: True
+    train:
+      target: sgm.data.sen2_mtc_new.sen2_mtc_new.Sen2_MTC_New_Multi
+      params:
+        data_root: "/remote-home/share/dmb_nas2/liuyi/Sen2_MTC_New/" # path to the dataset
+        use_ir: True # whether to use the infrared band
+        mode: 'train' # mode of the dataset, can be 'train', 'val' or 'test'
+    validation:
+      target: sgm.data.sen2_mtc_new.sen2_mtc_new.Sen2_MTC_New_Multi
+      params:
+        data_root: "/remote-home/share/dmb_nas2/liuyi/Sen2_MTC_New/"
+        use_ir: True
+        mode: 'val'
+    test:
+      target: sgm.data.sen2_mtc_new.sen2_mtc_new.Sen2_MTC_New_Multi
+      params:
+        data_root: "/remote-home/share/dmb_nas2/liuyi/Sen2_MTC_New/"
+        use_ir: True
+        mode: 'test'
+    predict:
+      target: sgm.data.sen2_mtc_new.sen2_mtc_new.Sen2_MTC_New_Multi
+      params:
+        data_root: "/remote-home/share/dmb_nas2/liuyi/Sen2_MTC_New/"
+        use_ir: True
+        mode: 'test'
+
+lightning:
+  modelcheckpoint:
+    params:
+      every_n_train_steps: 5000 # save the model every 5000 steps
+      monitor: "RMSE" # the metric to monitor
+
+  callbacks:
+    metrics_over_trainsteps_checkpoint:
+      params:
+        every_n_train_steps: 25000
+
+    image_logger:
+      target: main.ImageLogger
+      params:
+        enable_autocast: False # whether to use autocast for the image logger
+        disabled: False # whether to disable the image logger
+        batch_frequency: 1000 # log the images every 1000 steps
+        max_images: 64 # the maximum number of images to log
+        increase_log_steps: True # whether to increase the log steps in the first 1000 steps
+        log_first_step: False # whether to log the first step
+        log_images_kwargs:
+          use_ema_scope: False # whether to use the ema scope for logging
+          N: 64 # the number of images to log
+          n_rows: 16 # the number of rows for logging
+          return_intermediate: True # whether to return the intermediate images (x_{t}, x_{t-1}, x_{t-2}, ...)
+          return_denoised: True # whether to return the denoised images (i.e., the output of the denoiser)
+          return_add_mu: True # whether to return the added mean image (i.e., x + (1-s(t))/s(t) * mu)
+          return_add_noise: True # whether to return the added noise image (i.e., x + (1-s(t))/s(t) * mu + \sigma(t) * n)
+          return_cond: True # whether to return the condition image (i.e., the auxiliary modal image)
+
+  trainer:
+    devices: 6, # number of GPUs to use (e.g. 1,2,3 means using device 0, device 1, and device 2)
+    num_sanity_val_steps: 2 # number of sanity val steps
+    benchmark: True # whether to enable benchmark mode
+    accumulate_grad_batches: 1 # accumulate gradients for 1 batch
+    max_epochs: 1000 # maximum number of epochs
+    
