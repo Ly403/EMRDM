@@ -111,7 +111,7 @@ python main.py --base configs/example_training/[yaml_file_name].yaml --enable_tf
 ```
 The `[yaml_file_name].yaml` files are the same as those in training process. Note that
 - You should set the `data.params.test` part, otherwise the test dataloader will not be implemented.
-- You should modify he value of `model.ckpt_path` in your `yaml` file to the path of your checkpoint. We have provided checkpoints of EMRDM trained on the four datasets used by us in the Sec. [Models](#model).
+- You should modify he value of `model.ckpt_path` in your `yaml` file to the path of your checkpoint. We have provided checkpoints of EMRDM trained on the four datasets used by us in the Sec. [Models](https://github.com/Ly403/EMRDM?tab=readme-ov-file#open_file_foldermodels).
 ### :computer:Predict
 The predicting process will output all cloud removed images. This process only support using one GPU (by setting `lightning.trainer.devices` to only one device). You can run predicting process using:
 ```bash
@@ -119,7 +119,7 @@ python main.py --base configs/example_training/[yaml_file_name].yaml --enable_tf
 ```
 The `[yaml_file_name].yaml` files are the same as those in the testing process. Note that you should set the `data.params.predict` part and the `model.ckpt_path` part (the same way as testing), otherwise you will not obtain the correct results.
 
-## :open_file_folder:Models {#model}
+## :open_file_folder:Models
 We have released all the training results, including the training configuration files, the weights of trained models, and the log files of the training process.
 
 We have also released all the testing results, including the testing configuration files and the log files of the testing process.

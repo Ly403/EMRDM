@@ -112,7 +112,7 @@ python main.py --base configs/example_training/[yaml_file_name].yaml --enable_tf
 ```
 `[yaml_file_name].yaml`可以使用和训练过程中一样的`yaml`文件，但是需要做如下一些修改：
 - 你需要设置`yaml`里面的`data.params.test`部分，以适配你的测试数据集的信息，否则测试集的dataloader将不会被实现，测试过程也就不会进行。
-- 你需要修改`yaml`里面`model.ckpt_path`的值，将之改为你训练好的（或者是本项目提供的）检查点的路径。我们提供了一些已经训练好的EMRDM的检查点，可用于测试，请参考[模型](#model)一节。
+- 你需要修改`yaml`里面`model.ckpt_path`的值，将之改为你训练好的（或者是本项目提供的）检查点的路径。我们提供了一些已经训练好的EMRDM的检查点，可用于测试，请参考[模型](https://github.com/Ly403/EMRDM/blob/main/README_zh.md#open_file_folder%E6%A8%A1%E5%9E%8B)一节。
 ### :computer:预测
 预测过程会输出所有预测的去云图像（确保你有足够的硬盘空间），这个过程目前只支持单GPU运行，你需要修改`yaml`文件中的`lightning.trainer.devices`部分，只能设置一个设备。然后通过下面的命令运行预测过程：
 ```bash
@@ -120,7 +120,7 @@ python main.py --base configs/example_training/[yaml_file_name].yaml --enable_tf
 ```
 `[yaml_file_name].yaml`和测试过程使用的是一样的。注意你还需要设置一下`yaml`文件里面的`data.params.predict`部分以及`model.ckpt_path`的值，设置方法和训练过程一样，不设置的话将无法得到正确结果。
 
-## :open_file_folder:模型 {#model}
+## :open_file_folder:模型
 我们公布了所有的训练结果，包括训练的配置文件，训练得到的模型权重，还有训练过程的日志文件。
 
 我们也公布了所有的测试结果，包括测试的配置文件，测试过程的日志文件。
