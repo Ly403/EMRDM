@@ -1,5 +1,5 @@
 # Effective Cloud Removal for Remote Sensing Images by an Improved Mean-Reverting Denoising Model with Elucidated Design Space
-### <div align="center"> Yi Liu, Wengen Li$^{\ast}$, Jihong Guan$^{\ast}$, Shuigeng Zhou, Yichao Zhang <div>
+### <div align="center"> Yi Liu, Wengen Li*, Jihong Guan*, Shuigeng Zhou, Yichao Zhang <div>
 ### <div align="center"> CVPR 2025 <div>
 <div align="center">
     <a href="https://github.com/Ly403/EMRDM"><img src="https://img.shields.io/static/v1?label=Project&message=Github&color=blue&logo=github-pages"></a> &ensp;
