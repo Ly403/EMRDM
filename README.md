@@ -153,13 +153,10 @@ If you have encountered any problems, feel free to contact me via my email <a hr
 
 ## :book:BibTeX
 ```bibtex
-@misc{liu2025effectivecloudremovalremote,
-      title={Effective Cloud Removal for Remote Sensing Images by an Improved Mean-Reverting Denoising Model with Elucidated Design Space}, 
-      author={Yi Liu and Wengen Li and Jihong Guan and Shuigeng Zhou and Yichao Zhang},
-      year={2025},
-      eprint={2503.23717},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2503.23717}, 
+@article{liu2025effective,
+  title={Effective Cloud Removal for Remote Sensing Images by an Improved Mean-Reverting Denoising Model with Elucidated Design Space},
+  author={Liu, Yi and Li, Wengen and Guan, Jihong and Zhou, Shuigeng and Zhang, Yichao},
+  journal={arXiv preprint arXiv:2503.23717},
+  year={2025}
 }
 ```
